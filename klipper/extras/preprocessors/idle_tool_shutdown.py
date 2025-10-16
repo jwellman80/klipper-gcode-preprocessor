@@ -235,6 +235,21 @@ class IdleToolShutdown(GcodePreprocessorPlugin):
         if self.idle_timeout_enabled and line_num in self.line_cumulative_times:
             self.current_time = self.line_cumulative_times[line_num]
 
+        # Check if this line heats up a tool (M104/M109 with temp > 0)
+        # If so, remove from shutdown set to allow future predictive cooldowns
+        if re.match(r'^M10[49]\s+', line, re.IGNORECASE):
+            params = self._parse_gcode_params(line)
+            # Check if both T and S parameters exist, and S > 0
+            if 'T' in params and 'S' in params:
+                tool_num = int(params['T'])
+                temp = params['S']
+
+                # If temp > 0, this is a heating command (not cooling)
+                if temp > 0:
+                    if tool_num in self.tools_shutdown_idle:
+                        self.tools_shutdown_idle.remove(tool_num)
+                        self.logger.info(f"idle_tool_shutdown: T{tool_num} reheated to {temp}C at line {line_num}, allowing future predictive cooldown")
+
         # Check if we have a pending cooldown to insert (end-of-use feature)
         if self.pending_cooldown is not None:
             cooldown_tool = self.pending_cooldown

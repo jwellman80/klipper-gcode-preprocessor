@@ -307,15 +307,23 @@ def load_config(config):
 def load_config_prefix(config):
     """Allow [gcode_preprocessor ...] config sections to be defined"""
     # This function registers the config sections so Klipper doesn't complain
-    # We need to declare all possible options so Klipper's validator accepts them
+    # We need to explicitly read all possible options that processors might use
 
-    # Get the section name to determine which processor this is for
-    section_name = config.get_name()
+    # Common options across all processors
+    config.get('exclude_tools', '')
 
-    # Read all options as strings to prevent validation errors
-    # Klipper will complain if options aren't explicitly read
-    for option in config.get_prefix_options(''):
-        config.get(option, '')
+    # idle_tool_shutdown options
+    config.getfloat('idle_timeout_minutes', 0)
+    config.getfloat('initial_feedrate', 3000.0)
+
+    # token_replacer options
+    config.getboolean('extract_tools', True)
+    config.getboolean('extract_colors', True)
+    config.getboolean('extract_materials', True)
+    config.getboolean('extract_temperatures', True)
+    config.getboolean('extract_purge_volumes', False)
+    config.getboolean('extract_filament_names', False)
+    config.getboolean('replace_placeholders', True)
 
     # Return a dummy object that Klipper can register
     return PreprocessorConfigSection(config)

@@ -193,12 +193,18 @@ if __name__ == "__main__":
                                     except:
                                         return default
 
+                                def getfloat(self, key, default=0.0):
+                                    try:
+                                        return self.parser.getfloat(self.section_name, key)
+                                    except:
+                                        return default
+
                             # Load processors
                             loaded_processors = []
                             for proc_name in processors_list:
                                 try:
                                     module = importlib.import_module(f'preprocessors.{proc_name}')
-                                    section_name = f'preprocessor {proc_name}'
+                                    section_name = f'gcode_preprocessor {proc_name}'
                                     proc_config = SimpleProcessorConfig(section_name, parser)
                                     processor = module.create_processor(proc_config, logging)
                                     loaded_processors.append(processor)
