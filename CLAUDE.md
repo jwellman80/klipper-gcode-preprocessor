@@ -43,13 +43,13 @@ LIST_GCODE_PROCESSORS
 The preprocessor uses a three-phase pipeline where each processor gets three passes:
 
 1. **Pre-process Pass** (`pre_process()`): Scan entire file, gather metadata, build usage maps
-   - Example: `metadata_extractor` scans for slicer comments
-   - Example: `tool_thermal_manager` builds tool usage map to find last usages
+   - Example: `token_replacer` scans for slicer comments
+   - Example: `unused_tool_shutdown` builds tool usage map to find last usages
 
 2. **Line-by-line Pass** (`process_line()`): Transform individual G-code lines
    - Each processor receives each line and returns a list of output lines (0, 1, or many)
-   - Processors run in priority order for each line
-   - Example: `placeholder_replacer` replaces `!tool_count!` with actual count
+   - Processors run in list order for each line
+   - Example: `token_replacer` replaces `!tool_count!` with actual count
 
 3. **Post-process Pass** (`post_process()`): Finalization and cleanup
    - Used for summary generation or final validation
@@ -67,30 +67,26 @@ The preprocessor uses a three-phase pipeline where each processor gets three pas
 - Processors live in `klipper/extras/preprocessors/` subdirectory
 
 **Moonraker Integration (Optional):**
-- `moonraker/toolchanger_preprocessor.py` - Hooks into Moonraker's file upload system
+- `moonraker/gcode_preprocessor.py` - Hooks into Moonraker's file upload system
 - Can be invoked standalone as a script when files are uploaded
 - Sets `METADATA_SCRIPT` to intercept file processing
 
 ### Built-in Processors
 
-1. **metadata_extractor** (priority=10)
+1. **token_replacer**
    - Extracts slicer metadata from comments (colors, materials, temperatures)
    - Detects slicer type (PrusaSlicer, OrcaSlicer, BambuStudio, SuperSlicer)
    - Stores extracted data in `PreprocessorContext` for other processors
-   - See `klipper/extras/preprocessors/metadata_extractor.py`
+   - Replaces token placeholders like `!tool_count!`, `!colors!`, `!materials!`, `!temperatures!`
+   - Processes non-comment lines only for replacements (preserves slicer metadata)
+   - See `klipper/extras/preprocessors/token_replacer.py`
 
-2. **tool_thermal_manager** (priority=20)
-   - Automatically inserts `M104 T{n} S0` cooldown commands after last tool usage
+2. **unused_tool_shutdown**
+   - Automatically inserts `M104 T{n} S0` shutdown commands after last tool usage
    - Scans entire file to build tool usage map, identifies last usage for each tool
-   - By default, all tools are cooled down (no exclusions)
+   - By default, all tools are shut down (no exclusions)
    - Can exclude specific tools via `exclude_tools` config (e.g., `exclude_tools: 0` to skip T0)
-   - See `klipper/extras/preprocessors/tool_thermal_manager.py`
-
-3. **placeholder_replacer** (priority=30)
-   - Replaces placeholders like `!tool_count!`, `!colors!`, `!materials!`
-   - Depends on metadata from `metadata_extractor`
-   - Processes non-comment lines only (preserves slicer metadata)
-   - See `klipper/extras/preprocessors/placeholder_replacer.py`
+   - See `klipper/extras/preprocessors/unused_tool_shutdown.py`
 
 ### Key Patterns
 
@@ -101,10 +97,10 @@ The system recognizes multiple tool change formats via regex patterns in `GcodeP
 - Happy Hare MMU: `MMU_CHANGE_TOOL TOOL=0`
 
 **Processing Fingerprint:**
-Files are marked with `; processed by toolchanger_preprocessor` on first line to prevent reprocessing.
+Files are marked with `; processed by klipper-gcode-preprocessor` on first line to prevent reprocessing.
 
 **Context Sharing:**
-`PreprocessorContext.metadata` dict allows processors to share data. Early processors (like `metadata_extractor`) store data that later processors (like `placeholder_replacer`) consume.
+`PreprocessorContext.metadata` dict allows processors to share data between the pre-process and line-by-line phases. For example, `token_replacer` scans the file in `pre_process()` and uses the gathered data in `process_line()` to replace token placeholders.
 
 ## Writing Custom Processors
 
@@ -153,11 +149,9 @@ def create_processor(config, logger):
 Then configure in `printer.cfg` or config file:
 ```ini
 [gcode_preprocessor]
-processors: metadata_extractor, tool_thermal_manager, my_processor
-processor_order: metadata_extractor=10, tool_thermal_manager=20, my_processor=30
+processors: token_replacer, unused_tool_shutdown, my_processor
 
 [preprocessor my_processor]
-enabled: True
 my_option: value
 ```
 
@@ -166,15 +160,14 @@ my_option: value
 **Default Config:** `config/gcode-preprocessor.cfg` (or installed to `~/printer_data/config/gcode-preprocessor/preprocessor.cfg`)
 
 **Config Sections:**
-- `[gcode_preprocessor]` - Main settings (enabled, processors list, processor_order)
-- `[preprocessor {name}]` - Per-processor settings (enabled, priority, processor-specific options)
-- `[toolchanger_preprocessor]` - Optional Moonraker component settings
+- `[gcode_preprocessor]` - Main settings (enabled, processors list)
+- `[preprocessor {name}]` - Per-processor settings (processor-specific options)
+- Moonraker component settings (in moonraker.conf): `[gcode_preprocessor]`
 
-**Priority System:**
-Lower numbers run first. Processors execute in priority order during each pass. Typical order:
-1. metadata_extractor (10) - gather data first
-2. tool_thermal_manager (20) - use metadata
-3. placeholder_replacer (30) - depends on metadata, runs last
+**Execution Order:**
+Processors execute in the order they appear in the `processors` list. Typical order:
+1. token_replacer - gather data first and replace token placeholders
+2. unused_tool_shutdown - insert shutdown commands
 
 ## File Locations
 

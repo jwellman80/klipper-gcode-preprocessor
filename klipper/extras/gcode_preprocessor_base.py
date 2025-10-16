@@ -39,8 +39,6 @@ class GcodePreprocessorPlugin(ABC):
         """
         self.config = config
         self.logger = logger
-        self.enabled = config.get('enabled', True)
-        self.priority = config.get('priority', 50)
         self.name = self.__class__.__name__
 
     @abstractmethod
@@ -64,7 +62,7 @@ class GcodePreprocessorPlugin(ABC):
         Returns:
             True if this processor should run, False otherwise
         """
-        return self.enabled
+        return True
 
     def pre_process(self, file_path: str, context: PreprocessorContext) -> bool:
         """
@@ -222,5 +220,5 @@ class PreprocessorUtilities:
     def add_fingerprint(slicer: Optional[str] = None) -> str:
         """Generate a fingerprint comment for preprocessed files"""
         if slicer:
-            return f"; processed by toolchanger_preprocessor (slicer: {slicer})\n"
-        return "; processed by toolchanger_preprocessor\n"
+            return f"; processed by klipper-gcode-preprocessor (slicer: {slicer})\n"
+        return "; processed by klipper-gcode-preprocessor\n"

@@ -95,12 +95,12 @@ function install_moonraker_component {
         1)
             if [ -d "${MOONRAKER_PATH}/moonraker/components" ]; then
                 echo "[INSTALL] Installing Moonraker component..."
-                ln -sfn "${INSTALL_PATH}"/moonraker/toolchanger_preprocessor.py "${MOONRAKER_PATH}"/moonraker/components/
+                ln -sfn "${INSTALL_PATH}"/moonraker/gcode_preprocessor.py "${MOONRAKER_PATH}"/moonraker/components/
                 echo "[INSTALL] Moonraker component installed!"
                 echo ""
                 echo "[INFO] Add the following to your moonraker.conf to enable automatic preprocessing:"
                 echo ""
-                echo "[toolchanger_preprocessor]"
+                echo "[gcode_preprocessor]"
                 echo "enable_preprocessing: True"
                 echo ""
                 echo "[INFO] Then restart Moonraker: sudo systemctl restart moonraker"
@@ -121,9 +121,9 @@ function install_moonraker_component {
     esac
 }
 
-function restart_klipper {
-    echo -e "\n[POST-INSTALL] Restart Klipper now?"
-    echo "1. Yes, restart Klipper"
+function restart_services {
+    echo -e "\n[POST-INSTALL] Restart Klipper and Moonraker now?"
+    echo "1. Yes, restart both services"
     echo "2. No, I'll restart manually later"
     read -rp "Select an option [1-2]: " restart_choice
 
@@ -132,10 +132,17 @@ function restart_klipper {
             echo "[POST-INSTALL] Restarting Klipper..."
             sudo systemctl restart klipper
             echo "[POST-INSTALL] Klipper restarted!"
+
+            if [ "$(sudo systemctl list-units --full -all -t service --no-legend | grep -F 'moonraker.service')" ]; then
+                echo "[POST-INSTALL] Restarting Moonraker..."
+                sudo systemctl restart moonraker
+                echo "[POST-INSTALL] Moonraker restarted!"
+            fi
             ;;
         2)
-            echo "[POST-INSTALL] Please restart Klipper manually when ready:"
+            echo "[POST-INSTALL] Please restart services manually when ready:"
             echo "    sudo systemctl restart klipper"
+            echo "    sudo systemctl restart moonraker"
             ;;
         *)
             echo "[WARNING] Invalid option, skipping restart"
@@ -153,8 +160,9 @@ function show_completion_message {
     echo "1. Add to your printer.cfg:"
     echo "   [include gcode-preprocessor/preprocessor.cfg]"
     echo ""
-    echo "2. Restart Klipper if you haven't already:"
+    echo "2. Restart services if you haven't already:"
     echo "   sudo systemctl restart klipper"
+    echo "   sudo systemctl restart moonraker"
     echo ""
     echo "3. Test the preprocessor with:"
     echo "   PREPROCESS_GCODE_FILE FILE=/path/to/file.gcode"
@@ -178,5 +186,5 @@ check_download
 link_klipper_modules
 install_config
 install_moonraker_component
-restart_klipper
+restart_services
 show_completion_message

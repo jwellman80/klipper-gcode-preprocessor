@@ -2,6 +2,32 @@
 
 A powerful, extensible G-code preprocessing system for Klipper that automatically optimizes and enhances G-code files for multi-tool 3D printing.
 
+## Installation
+
+```bash
+cd ~
+git clone https://github.com/jwellman80/klipper-gcode-preprocessor.git
+cd klipper-gcode-preprocessor
+./install.sh
+```
+
+Add to `printer.cfg`
+```ini
+[include gcode-preprocessor/preprocessor.cfg]
+```
+
+Add to `moonraker.conf`:
+```ini
+[gcode_preprocessor]
+enable_preprocessing: True
+```
+
+Restart Moonraker and Klipper:
+```bash
+sudo service moonraker restart
+sudo service klipper restart
+```
+
 ## Features
 
 ### 🔥 **Tool Thermal Manager** (Automatic Tool Cooldown)
@@ -42,67 +68,6 @@ gcode:
     M118 Colors: !colors!
 ```
 
-## Installation
-
-### Quick Install
-
-```bash
-cd ~
-git clone https://github.com/jwellman80/klipper-gcode-preprocessor.git
-cd klipper-gcode-preprocessor
-./install.sh
-```
-
-### Manual Install
-
-1. Clone the repository:
-```bash
-cd ~
-git clone https://github.com/jwellman80/klipper-gcode-preprocessor.git
-```
-
-2. Link Klipper modules:
-```bash
-ln -sf ~/klipper-gcode-preprocessor/klipper/extras/gcode_preprocessor*.py ~/klipper/klippy/extras/
-ln -sf ~/klipper-gcode-preprocessor/klipper/extras/preprocessors ~/klipper/klippy/extras/
-```
-
-3. Install configuration:
-```bash
-mkdir -p ~/printer_data/config/gcode-preprocessor
-cp ~/klipper-gcode-preprocessor/config/gcode-preprocessor.cfg ~/printer_data/config/gcode-preprocessor/preprocessor.cfg
-```
-
-4. Add to your `printer.cfg`:
-```ini
-[include gcode-preprocessor/preprocessor.cfg]
-```
-
-5. Restart Klipper:
-```bash
-sudo systemctl restart klipper
-```
-
-### Optional: Moonraker Integration
-
-For automatic preprocessing on file upload:
-
-1. Link Moonraker component:
-```bash
-ln -sf ~/klipper-gcode-preprocessor/moonraker/toolchanger_preprocessor.py ~/moonraker/moonraker/components/
-```
-
-2. Add to `moonraker.conf`:
-```ini
-[toolchanger_preprocessor]
-enable_preprocessing: True
-```
-
-3. Restart Moonraker:
-```bash
-sudo systemctl restart moonraker
-```
-
 ## Usage
 
 ### Automatic Processing
@@ -123,31 +88,22 @@ LIST_GCODE_PROCESSORS
 ### Default Settings
 Located in `~/printer_data/config/gcode-preprocessor/preprocessor.cfg`
 
-### Tool Thermal Manager Settings
+### Unused Tool Shutdown Settings
 ```ini
-[preprocessor tool_thermal_manager]
-enabled: True
-immediate_cooldown: True
-exclude_tools:                # Empty by default (all tools cooled)
-                             # Example: exclude_tools: 0  (don't cool T0)
-add_cooldown_comments: True
+[preprocessor unused_tool_shutdown]
+exclude_tools:                # Empty by default (all tools shut down)
+                             # Example: exclude_tools: 0  (don't shut down T0)
+                             # Example: exclude_tools: 0,1  (don't shut down T0 or T1)
 ```
 
-### Metadata Extractor Settings
+### Token Replacer Settings
 ```ini
-[preprocessor metadata_extractor]
-enabled: True
+[preprocessor token_replacer]
 extract_tools: True
 extract_colors: True
 extract_materials: True
 extract_temperatures: True
-```
-
-### Placeholder Replacer Settings
-```ini
-[preprocessor placeholder_replacer]
-enabled: True
-placeholders: !tool_count!, !colors!, !materials!, !temperatures!
+replace_placeholders: True
 ```
 
 ## Writing Custom Processors
@@ -190,11 +146,9 @@ def create_processor(config, logger):
 Then add to your config:
 ```ini
 [gcode_preprocessor]
-processors: metadata_extractor, tool_thermal_manager, my_processor
-processor_order: metadata_extractor=10, tool_thermal_manager=20, my_processor=30
+processors: token_replacer, unused_tool_shutdown, my_processor
 
 [preprocessor my_processor]
-enabled: True
 # Custom settings
 ```
 
@@ -232,11 +186,11 @@ klipper-gcode-preprocessor/
 │   ├── gcode_preprocessor.py          # Main registry
 │   └── preprocessors/
 │       ├── __init__.py
-│       ├── tool_thermal_manager.py    # Tool cooldown
-│       ├── metadata_extractor.py      # Extract metadata
-│       └── placeholder_replacer.py    # Replace placeholders
+│       ├── token_replacer.py          # Extract metadata & replace tokens
+│       ├── unused_tool_shutdown.py   # Auto shutdown unused tools
+│       └── example_template.py       # Example processor template
 ├── moonraker/
-│   └── toolchanger_preprocessor.py    # Moonraker component
+│   └── gcode_preprocessor.py          # Moonraker component
 ├── config/
 │   └── gcode-preprocessor.cfg         # Default configuration
 ├── docs/
@@ -255,20 +209,19 @@ klipper-gcode-preprocessor/
 ### Files Already Preprocessed
 Files are only preprocessed once. First line will contain:
 ```gcode
-; processed by toolchanger_preprocessor
+; processed by klipper-gcode-preprocessor
 ```
 
 To reprocess, delete this line or re-upload the file.
 
-### Tool Not Cooling Down
-- Check `exclude_tools` setting (empty by default - all tools cooled)
+### Tool Not Shutting Down
+- Check `exclude_tools` setting (empty by default - all tools shut down)
 - Verify tool is used multiple times (needs "last usage")
-- Check logs for `tool_thermal_manager` messages
+- Check logs for `unused_tool_shutdown` messages
 
 ### Placeholders Not Replaced
-- Ensure `metadata_extractor` runs before `placeholder_replacer`
-- Check `processor_order` setting
-- Verify slicer is supported
+- Ensure `token_replacer` is in the processors list
+- Verify slicer is supported (PrusaSlicer, OrcaSlicer, BambuStudio, SuperSlicer)
 
 ## Examples
 

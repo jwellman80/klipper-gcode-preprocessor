@@ -111,14 +111,14 @@ class ExampleProcessor(GcodePreprocessorPlugin):
         Returns:
             True if this processor should run, False to skip
         """
-        # Default implementation checks if processor is enabled
-        # You can add additional conditions here
+        # Default implementation returns True
+        # You can add conditions to skip certain files
 
         # Example: Only process files with certain names
         # if 'multi_tool' not in context.filename.lower():
         #     return False
 
-        return self.enabled
+        return True
 
     def pre_process(self, file_path: str, context: PreprocessorContext) -> bool:
         """

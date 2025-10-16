@@ -1,4 +1,4 @@
-# Toolchanger G-code Preprocessor - Moonraker Component
+# Klipper G-code Preprocessor - Moonraker Component
 # Hooks into Moonraker's file upload/metadata system to preprocess G-code files
 
 import os
@@ -6,7 +6,7 @@ import sys
 import logging
 
 
-class ToolchangerPreprocessor:
+class GcodePreprocessor:
     """
     Moonraker component that integrates G-code preprocessing into file upload
     """
@@ -22,7 +22,7 @@ class ToolchangerPreprocessor:
         if self.enabled:
             self.setup_preprocessor_hook(config)
 
-        logging.info("toolchanger_preprocessor: Component initialized")
+        logging.info("gcode_preprocessor: Component initialized")
 
     def setup_preprocessor_hook(self, config):
         """
@@ -40,17 +40,17 @@ class ToolchangerPreprocessor:
         try:
             from .file_manager import file_manager
             file_manager.METADATA_SCRIPT = os.path.abspath(__file__) + args
-            logging.info(f"toolchanger_preprocessor: Set METADATA_SCRIPT to {file_manager.METADATA_SCRIPT}")
+            logging.info(f"gcode_preprocessor: Set METADATA_SCRIPT to {file_manager.METADATA_SCRIPT}")
         except ImportError:
-            logging.warning("toolchanger_preprocessor: Could not import file_manager - preprocessing may not work")
+            logging.warning("gcode_preprocessor: Could not import file_manager - preprocessing may not work")
 
     async def component_init(self):
         """Initialize component after server is ready"""
-        logging.info("toolchanger_preprocessor: Component initialization complete")
+        logging.info("gcode_preprocessor: Component initialization complete")
 
 
 def load_component(config):
-    return ToolchangerPreprocessor(config)
+    return GcodePreprocessor(config)
 
 
 # ==============================================================================
@@ -134,20 +134,20 @@ if __name__ == "__main__":
     # Perform preprocessing if enabled
     if config.get("preprocess", False):
         try:
-            logging.info(f"toolchanger_preprocessor: Pre-processing file: {file_path}")
+            logging.info(f"gcode_preprocessor: Pre-processing file: {file_path}")
 
             # Check if file is a G-code file
             if not file_path.endswith(".gcode"):
-                logging.info(f"toolchanger_preprocessor: Skipping non-G-code file: {file_path}")
+                logging.info(f"gcode_preprocessor: Skipping non-G-code file: {file_path}")
             else:
                 # Check if already processed
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     first_line = f.readline()
-                    if 'processed by toolchanger_preprocessor' in first_line:
-                        logging.info(f"toolchanger_preprocessor: File already preprocessed: {file_path}")
+                    if 'processed by klipper-gcode-preprocessor' in first_line:
+                        logging.info(f"gcode_preprocessor: File already preprocessed: {file_path}")
                     else:
                         # Import and run the preprocessor directly
-                        logging.info(f"toolchanger_preprocessor: File needs preprocessing: {file_path}")
+                        logging.info(f"gcode_preprocessor: File needs preprocessing: {file_path}")
 
                         # Add the Klipper extras directory to Python path
                         klipper_extras_path = os.path.expanduser('~/klipper/klippy/extras')
@@ -202,12 +202,12 @@ if __name__ == "__main__":
                                     proc_config = SimpleProcessorConfig(section_name, parser)
                                     processor = module.create_processor(proc_config, logging)
                                     loaded_processors.append(processor)
-                                    logging.info(f"toolchanger_preprocessor: Loaded processor '{proc_name}'")
+                                    logging.info(f"gcode_preprocessor: Loaded processor '{proc_name}'")
                                 except Exception as e:
-                                    logging.warning(f"toolchanger_preprocessor: Failed to load processor '{proc_name}': {e}")
+                                    logging.warning(f"gcode_preprocessor: Failed to load processor '{proc_name}': {e}")
 
                             if not loaded_processors:
-                                logging.warning("toolchanger_preprocessor: No processors loaded, skipping")
+                                logging.warning("gcode_preprocessor: No processors loaded, skipping")
                             else:
                                 # Create context
                                 context = PreprocessorContext()
@@ -218,12 +218,12 @@ if __name__ == "__main__":
                                 active_processors = [p for p in loaded_processors if p.can_process(file_path, context)]
 
                                 if not active_processors:
-                                    logging.info("toolchanger_preprocessor: No applicable processors for this file")
+                                    logging.info("gcode_preprocessor: No applicable processors for this file")
                                 else:
                                     # Pass 1: Pre-processing
                                     for processor in active_processors:
                                         if not processor.pre_process(file_path, context):
-                                            logging.error(f"toolchanger_preprocessor: Pre-processing failed in {processor.get_name()}")
+                                            logging.error(f"gcode_preprocessor: Pre-processing failed in {processor.get_name()}")
                                             raise Exception(f"Pre-processing failed in {processor.get_name()}")
 
                                     # Pass 2: Line-by-line processing
@@ -252,7 +252,7 @@ if __name__ == "__main__":
                                     # Pass 3: Post-processing
                                     for processor in active_processors:
                                         if not processor.post_process(file_path, context):
-                                            logging.error(f"toolchanger_preprocessor: Post-processing failed in {processor.get_name()}")
+                                            logging.error(f"gcode_preprocessor: Post-processing failed in {processor.get_name()}")
                                             raise Exception(f"Post-processing failed in {processor.get_name()}")
 
                                     # Write output atomically
@@ -260,14 +260,14 @@ if __name__ == "__main__":
                                     PreprocessorUtilities.write_file_lines(temp_path, output_lines)
                                     os.replace(temp_path, file_path)
 
-                                    logging.info(f"toolchanger_preprocessor: Successfully preprocessed {file_path} with {len(active_processors)} processors")
+                                    logging.info(f"gcode_preprocessor: Successfully preprocessed {file_path} with {len(active_processors)} processors")
 
                         except Exception as e:
-                            logging.error(f"toolchanger_preprocessor: Error during preprocessing: {e}")
+                            logging.error(f"gcode_preprocessor: Error during preprocessing: {e}")
                             logging.error(traceback.format_exc())
 
         except Exception as e:
-            logging.error(f"toolchanger_preprocessor: Error during preprocessing: {e}")
+            logging.error(f"gcode_preprocessor: Error during preprocessing: {e}")
             logging.error(traceback.format_exc())
             # Don't exit with error - allow metadata extraction to continue
 
@@ -283,10 +283,10 @@ if __name__ == "__main__":
             import metadata
             metadata.main(config)
         else:
-            logging.warning(f"toolchanger_preprocessor: file_manager directory not found at {target_dir}")
-            logging.info("toolchanger_preprocessor: Metadata extraction skipped")
+            logging.warning(f"gcode_preprocessor: file_manager directory not found at {target_dir}")
+            logging.info("gcode_preprocessor: Metadata extraction skipped")
 
     except Exception as e:
-        logging.error(f"toolchanger_preprocessor: Error during metadata extraction: {e}")
+        logging.error(f"gcode_preprocessor: Error during metadata extraction: {e}")
         logging.error(traceback.format_exc())
         sys.exit(-1)

@@ -1,5 +1,5 @@
-# Tool Thermal Manager Preprocessor
-# Automatically cools down tools after their last usage
+# Unused Tool Shutdown Preprocessor
+# Automatically shuts down tools after their last usage
 
 from typing import Dict, List, Optional, Set
 import sys
@@ -15,9 +15,9 @@ from gcode_preprocessor_base import (
 )
 
 
-class ToolThermalManager(GcodePreprocessorPlugin):
+class UnusedToolShutdown(GcodePreprocessorPlugin):
     """
-    Processor that automatically inserts cooldown commands for tools
+    Processor that automatically inserts shutdown commands for tools
     after their last usage in the G-code file.
     """
 
@@ -25,8 +25,6 @@ class ToolThermalManager(GcodePreprocessorPlugin):
         super().__init__(config, logger)
 
         # Configuration options
-        self.immediate_cooldown = config.get('immediate_cooldown', True)
-        self.cooldown_delay = config.get('cooldown_delay', 0)
         self.exclude_tools_str = config.get('exclude_tools', '')
         self.exclude_tools: Set[int] = set()
 
@@ -38,9 +36,6 @@ class ToolThermalManager(GcodePreprocessorPlugin):
                 except ValueError:
                     pass
 
-        self.min_remaining_print_time = config.get('min_remaining_print_time', 300)
-        self.add_cooldown_comments = config.get('add_cooldown_comments', True)
-
         # Internal state
         self.tool_usage_map: Dict[int, List[int]] = {}  # tool_number -> [line_numbers]
         self.tool_last_usage: Dict[int, int] = {}  # tool_number -> last_line_number
@@ -49,16 +44,16 @@ class ToolThermalManager(GcodePreprocessorPlugin):
         self.pending_cooldown: Optional[int] = None  # Tool to cool after current line
 
     def get_name(self) -> str:
-        return "tool_thermal_manager"
+        return "unused_tool_shutdown"
 
     def get_description(self) -> str:
-        return "Automatically cools down tools after their last usage"
+        return "Automatically shuts down tools after their last usage"
 
     def pre_process(self, file_path: str, context: PreprocessorContext) -> bool:
         """
         First pass: Scan entire file to build tool usage map
         """
-        self.logger.info(f"tool_thermal_manager: Scanning file for tool usage")
+        self.logger.info(f"unused_tool_shutdown: Scanning file for tool usage")
 
         self.tool_usage_map.clear()
         self.tool_last_usage.clear()
@@ -86,10 +81,10 @@ class ToolThermalManager(GcodePreprocessorPlugin):
             if tool_number not in self.exclude_tools:
                 self.tools_to_cooldown.add(tool_number)
 
-        self.logger.info(f"tool_thermal_manager: Found {len(self.tool_usage_map)} tools used in file")
-        self.logger.info(f"tool_thermal_manager: Tools to manage: {sorted(self.tool_usage_map.keys())}")
-        self.logger.info(f"tool_thermal_manager: Excluded tools: {sorted(self.exclude_tools)}")
-        self.logger.info(f"tool_thermal_manager: Last usage map: {self.tool_last_usage}")
+        self.logger.info(f"unused_tool_shutdown: Found {len(self.tool_usage_map)} tools used in file")
+        self.logger.info(f"unused_tool_shutdown: Tools to manage: {sorted(self.tool_usage_map.keys())}")
+        self.logger.info(f"unused_tool_shutdown: Excluded tools: {sorted(self.exclude_tools)}")
+        self.logger.info(f"unused_tool_shutdown: Last usage map: {self.tool_last_usage}")
 
         # Store metadata for other processors
         context.set_metadata('tools_used', sorted(self.tool_usage_map.keys()))
@@ -108,15 +103,12 @@ class ToolThermalManager(GcodePreprocessorPlugin):
             cooldown_tool = self.pending_cooldown
             self.pending_cooldown = None
 
-            # Insert cooldown command
+            # Insert cooldown command with comment
+            output_lines.append(f"; T{cooldown_tool} no longer needed - cooling down\n")
             cooldown_cmd = PreprocessorUtilities.format_tool_temp_command(cooldown_tool, 0)
-
-            if self.add_cooldown_comments:
-                output_lines.append(f"; T{cooldown_tool} no longer needed - cooling down\n")
-
             output_lines.append(cooldown_cmd)
 
-            self.logger.info(f"tool_thermal_manager: Inserted cooldown for T{cooldown_tool} at line {context.current_line}")
+            self.logger.info(f"unused_tool_shutdown: Inserted cooldown for T{cooldown_tool} at line {context.current_line}")
 
         # Now process the current line
         tool_number = GcodePatterns.extract_tool_number(line)
@@ -144,12 +136,12 @@ class ToolThermalManager(GcodePreprocessorPlugin):
         """
         # Check if there's still a pending cooldown (shouldn't happen, but be safe)
         if self.pending_cooldown is not None:
-            self.logger.warning(f"tool_thermal_manager: Tool T{self.pending_cooldown} had pending cooldown at end of file")
+            self.logger.warning(f"unused_tool_shutdown: Tool T{self.pending_cooldown} had pending cooldown at end of file")
 
-        self.logger.info(f"tool_thermal_manager: Processing complete")
+        self.logger.info(f"unused_tool_shutdown: Processing complete")
         return True
 
 
 def create_processor(config, logger):
     """Factory function to create processor instance"""
-    return ToolThermalManager(config, logger)
+    return UnusedToolShutdown(config, logger)

@@ -35,7 +35,7 @@ sudo systemctl restart klipper
    - File: `~/klipper-gcode-preprocessor/examples/test_sample.gcode`
 2. Check the first line - it should now say:
    ```gcode
-   ; processed by toolchanger_preprocessor
+   ; processed by klipper-gcode-preprocessor
    ```
 3. Look for inserted cooldown commands:
    ```gcode
@@ -54,9 +54,8 @@ LIST_GCODE_PROCESSORS
 ```
 
 You should see:
-- metadata_extractor (priority=10)
-- tool_thermal_manager (priority=20)
-- placeholder_replacer (priority=30)
+- token_replacer
+- unused_tool_shutdown
 
 ## What It Does
 
@@ -76,15 +75,9 @@ You should see:
 Edit `~/printer_data/config/gcode-preprocessor/preprocessor.cfg`:
 
 ```ini
-# Disable tool thermal manager
-[preprocessor tool_thermal_manager]
-enabled: False
-
-# Or customize it
-[preprocessor tool_thermal_manager]
-enabled: True
-exclude_tools: 0  # Optional: exclude T0 from cooldown
-add_cooldown_comments: True
+# Customize unused tool shutdown
+[preprocessor unused_tool_shutdown]
+exclude_tools: 0  # Optional: exclude T0 from shutdown
 ```
 
 ## Next Steps

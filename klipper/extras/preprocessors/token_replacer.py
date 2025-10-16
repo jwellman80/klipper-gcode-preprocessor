@@ -1,5 +1,5 @@
-# Metadata Extractor Preprocessor
-# Extracts slicer metadata from G-code comments
+# Token Replacer Preprocessor
+# Extracts slicer metadata from G-code comments and replaces token placeholders
 
 from typing import Dict, List, Optional
 import sys
@@ -15,10 +15,10 @@ from gcode_preprocessor_base import (
 )
 
 
-class MetadataExtractor(GcodePreprocessorPlugin):
+class TokenReplacer(GcodePreprocessorPlugin):
     """
     Processor that extracts metadata from slicer-generated comments
-    including colors, materials, temperatures, and purge volumes
+    including colors, materials, temperatures, and replaces token placeholders
     """
 
     SUPPORTED_SLICERS = ['PrusaSlicer', 'SuperSlicer', 'OrcaSlicer', 'BambuStudio']
@@ -26,13 +26,16 @@ class MetadataExtractor(GcodePreprocessorPlugin):
     def __init__(self, config, logger):
         super().__init__(config, logger)
 
-        # Configuration options
+        # Configuration options - Metadata extraction
         self.extract_tools = config.get('extract_tools', True)
         self.extract_colors = config.get('extract_colors', True)
         self.extract_materials = config.get('extract_materials', True)
         self.extract_temperatures = config.get('extract_temperatures', True)
         self.extract_purge_volumes = config.get('extract_purge_volumes', False)
         self.extract_filament_names = config.get('extract_filament_names', False)
+
+        # Configuration options - Placeholder replacement
+        self.replace_placeholders = config.get('replace_placeholders', True)
 
         # Internal state
         self.slicer: Optional[str] = None
@@ -51,17 +54,20 @@ class MetadataExtractor(GcodePreprocessorPlugin):
         self.found_purge_volumes = False
         self.found_filament_names = False
 
+        # Placeholder replacement map
+        self.replacement_map: Dict[str, str] = {}
+
     def get_name(self) -> str:
-        return "metadata_extractor"
+        return "token_replacer"
 
     def get_description(self) -> str:
-        return "Extracts slicer metadata (colors, materials, temps) from G-code comments"
+        return "Extracts slicer metadata and replaces token placeholders (!tool_count!, !colors!, etc.)"
 
     def pre_process(self, file_path: str, context: PreprocessorContext) -> bool:
         """
         Scan file to extract all metadata from comments
         """
-        self.logger.info(f"metadata_extractor: Scanning file for metadata")
+        self.logger.info(f"token_replacer: Scanning file for metadata")
 
         lines = PreprocessorUtilities.read_file_lines(file_path)
 
@@ -72,7 +78,7 @@ class MetadataExtractor(GcodePreprocessorPlugin):
                 if match:
                     self.slicer = match.group(1) or match.group(2)
                     if self.slicer in self.SUPPORTED_SLICERS:
-                        self.logger.info(f"metadata_extractor: Detected slicer: {self.slicer}")
+                        self.logger.info(f"token_replacer: Detected slicer: {self.slicer}")
 
             # Extract tool changes if enabled
             if self.extract_tools:
@@ -128,16 +134,16 @@ class MetadataExtractor(GcodePreprocessorPlugin):
                     self.found_filament_names = True
 
         # Log what we found
-        self.logger.info(f"metadata_extractor: Slicer: {self.slicer}")
+        self.logger.info(f"token_replacer: Slicer: {self.slicer}")
         if self.extract_tools:
-            self.logger.info(f"metadata_extractor: Tools used: {sorted(self.tools_used)}")
-            self.logger.info(f"metadata_extractor: Total tool changes: {self.total_toolchanges}")
+            self.logger.info(f"token_replacer: Tools used: {sorted(self.tools_used)}")
+            self.logger.info(f"token_replacer: Total tool changes: {self.total_toolchanges}")
         if self.extract_colors:
-            self.logger.info(f"metadata_extractor: Colors: {self.colors}")
+            self.logger.info(f"token_replacer: Colors: {self.colors}")
         if self.extract_materials:
-            self.logger.info(f"metadata_extractor: Materials: {self.materials}")
+            self.logger.info(f"token_replacer: Materials: {self.materials}")
         if self.extract_temperatures:
-            self.logger.info(f"metadata_extractor: Temperatures: {self.temperatures}")
+            self.logger.info(f"token_replacer: Temperatures: {self.temperatures}")
 
         # Store metadata in context for other processors
         context.set_metadata('slicer', self.slicer)
@@ -149,13 +155,39 @@ class MetadataExtractor(GcodePreprocessorPlugin):
         context.set_metadata('purge_volumes', self.purge_volumes)
         context.set_metadata('filament_names', self.filament_names)
 
+        # Build replacement map for placeholder substitution
+        if self.replace_placeholders:
+            tools_list = sorted(self.tools_used)
+            self.replacement_map = {
+                '!tool_count!': str(len(tools_list)) if tools_list else '0',
+                '!tools!': ','.join(map(str, tools_list)) if tools_list else '0',
+                '!referenced_tools!': ','.join(map(str, tools_list)) if tools_list else '0',
+                '!total_toolchanges!': str(self.total_toolchanges),
+                '!colors!': ','.join(self.colors) if self.colors else '',
+                '!materials!': ','.join(self.materials) if self.materials else '',
+                '!temperatures!': ','.join(self.temperatures) if self.temperatures else '',
+                '!filament_names!': ','.join(self.filament_names) if self.filament_names else '',
+            }
+            self.logger.info(f"token_replacer: Built replacement map with {len(self.replacement_map)} placeholders")
+
         return True
 
     def process_line(self, line: str, context: PreprocessorContext) -> List[str]:
         """
-        This processor doesn't modify lines, just extracts metadata
+        Replace placeholders in non-comment lines
         """
-        return [line]
+        # Don't process comment lines (preserve slicer metadata)
+        if not self.replace_placeholders or GcodePatterns.is_comment(line):
+            return [line]
+
+        # Check if line contains any placeholders
+        modified_line = line
+        for placeholder, replacement in self.replacement_map.items():
+            if placeholder in modified_line:
+                modified_line = modified_line.replace(placeholder, replacement)
+                self.logger.info(f"token_replacer: Replaced {placeholder} with {replacement} at line {context.current_line}")
+
+        return [modified_line]
 
     def post_process(self, file_path: str, context: PreprocessorContext) -> bool:
         """
@@ -166,4 +198,4 @@ class MetadataExtractor(GcodePreprocessorPlugin):
 
 def create_processor(config, logger):
     """Factory function to create processor instance"""
-    return MetadataExtractor(config, logger)
+    return TokenReplacer(config, logger)

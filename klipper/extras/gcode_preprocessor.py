@@ -17,7 +17,6 @@ class ProcessorConfig:
     def __init__(self, section_name, parent_config):
         self.section_name = section_name
         self.parent_config = parent_config
-        self.priority_override = None
 
         # Try to load the actual config section if it exists
         self.config_section = None
@@ -34,8 +33,6 @@ class ProcessorConfig:
 
     def get(self, key, default=None):
         """Get a config value as string"""
-        if self.priority_override is not None and key == 'priority':
-            return self.priority_override
         if self.config_section and key in self.config_section:
             return self.config_section[key]
         return default
@@ -126,10 +123,6 @@ class GcodePreprocessor:
                 # This allows processors to read their config with .get() method
                 section_name = f"preprocessor {processor_name}"
                 proc_config = ProcessorConfig(section_name, self.config)
-
-                # Set priority based on list order (index * 10)
-                # This ensures processors run in the order they're listed
-                proc_config.priority_override = (index + 1) * 10
 
                 # Instantiate the processor
                 processor_class = getattr(module, 'create_processor', None)
@@ -257,7 +250,7 @@ class GcodePreprocessor:
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 first_line = f.readline()
-                return 'processed by toolchanger_preprocessor' in first_line
+                return 'processed by klipper-gcode-preprocessor' in first_line
         except:
             return False
 
@@ -290,10 +283,9 @@ class GcodePreprocessor:
             return
 
         gcmd.respond_info(f"Loaded {len(self.processors)} processors:")
-        for proc in self.processors:
-            status = "enabled" if proc.enabled else "disabled"
-            gcmd.respond_info(f"  - {proc.get_name()} (priority={proc.priority}, {status})")
-            gcmd.respond_info(f"    {proc.get_description()}")
+        for i, proc in enumerate(self.processors, 1):
+            gcmd.respond_info(f"  {i}. {proc.get_name()}")
+            gcmd.respond_info(f"     {proc.get_description()}")
 
     def get_status(self, eventtime):
         """Return status for queries"""
@@ -302,8 +294,6 @@ class GcodePreprocessor:
             'processors': [
                 {
                     'name': p.get_name(),
-                    'enabled': p.enabled,
-                    'priority': p.priority,
                     'description': p.get_description()
                 }
                 for p in self.processors

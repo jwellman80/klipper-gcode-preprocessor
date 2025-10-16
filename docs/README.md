@@ -4,8 +4,8 @@ The G-code preprocessor system automatically processes uploaded G-code files to 
 
 ## Features
 
-### 1. **Tool Thermal Manager** (Automatic Tool Cooldown)
-Automatically inserts `M104 T{n} S0` commands to cool down tools after their last usage.
+### 1. **Unused Tool Shutdown**
+Automatically inserts `M104 T{n} S0` commands to shut down tools after their last usage.
 
 **Example:**
 ```gcode
@@ -21,16 +21,16 @@ M104 T2 S0  ; T2 no longer needed - cooling down (INSERTED AUTOMATICALLY)
 
 **Configuration:**
 ```ini
-[preprocessor tool_thermal_manager]
-enabled: True
-immediate_cooldown: True
-exclude_tools:  # Empty by default (all tools cooled)
-                # Example: exclude_tools: 0  (don't cool T0)
-add_cooldown_comments: True
+[preprocessor unused_tool_shutdown]
+exclude_tools:  # Empty by default (all tools shut down)
+                # Example: exclude_tools: 0  (don't shut down T0)
+                # Example: exclude_tools: 0,1  (don't shut down T0 or T1)
 ```
 
-### 2. **Metadata Extractor**
-Extracts slicer metadata from G-code comments including:
+### 2. **Token Replacer** (Metadata Extraction & Placeholder Replacement)
+Extracts slicer metadata from G-code comments and replaces token placeholders with actual values:
+
+**Metadata extracted:**
 - Tools used
 - Filament colors
 - Filament materials
@@ -38,16 +38,15 @@ Extracts slicer metadata from G-code comments including:
 - Purge volumes (optional)
 - Filament names (optional)
 
-Supports PrusaSlicer, SuperSlicer, OrcaSlicer, and BambuStudio.
-
-### 3. **Placeholder Replacer**
-Replaces placeholders in your G-code or macros with actual values:
+**Placeholders replaced:**
 - `!tool_count!` → Number of tools used
 - `!tools!` or `!referenced_tools!` → Comma-separated list of tool numbers
 - `!total_toolchanges!` → Total number of tool changes
 - `!colors!` → Comma-separated hex color codes
 - `!materials!` → Comma-separated material types
 - `!temperatures!` → Comma-separated temperatures
+
+Supports PrusaSlicer, SuperSlicer, OrcaSlicer, and BambuStudio.
 
 **Example Usage in START_PRINT Macro:**
 ```gcode
@@ -108,16 +107,9 @@ Located in `~/printer_data/config/gcode-preprocessor/preprocessor.cfg`
 Edit the configuration file directly or override in your main `printer.cfg`:
 
 ```ini
-# Disable tool thermal manager
-[preprocessor tool_thermal_manager]
-enabled: False
-
-# Or customize settings
-[preprocessor tool_thermal_manager]
-enabled: True
-immediate_cooldown: True
-exclude_tools: 0, 1  # Don't cool T0 or T1 (optional)
-add_cooldown_comments: True
+# Customize unused tool shutdown
+[preprocessor unused_tool_shutdown]
+exclude_tools: 0,1  # Don't shut down T0 or T1 (optional)
 ```
 
 ## Writing Custom Processors
@@ -162,11 +154,9 @@ def create_processor(config, logger):
 2. Add to your config:
 ```ini
 [gcode_preprocessor]
-processors: metadata_extractor, tool_thermal_manager, my_processor
-processor_order: metadata_extractor=10, tool_thermal_manager=20, my_processor=30
+processors: token_replacer, unused_tool_shutdown, my_processor
 
 [preprocessor my_processor]
-enabled: True
 # Your custom settings here
 ```
 
@@ -174,23 +164,16 @@ enabled: True
 
 ### Processing Pipeline
 ```
-File Upload → Moonraker → toolchanger_preprocessor.py
+File Upload → Moonraker → gcode_preprocessor.py
                               ↓
                     gcode_preprocessor.py (Klipper)
                               ↓
                     ┌─────────┴─────────┐
-                    │   Processor 1     │ (metadata_extractor)
-                    │   priority=10     │
+                    │   Processor 1     │ (token_replacer)
                     └─────────┬─────────┘
                               ↓
                     ┌─────────┴─────────┐
-                    │   Processor 2     │ (tool_thermal_manager)
-                    │   priority=20     │
-                    └─────────┬─────────┘
-                              ↓
-                    ┌─────────┴─────────┐
-                    │   Processor 3     │ (placeholder_replacer)
-                    │   priority=30     │
+                    │   Processor 2     │ (unused_tool_shutdown)
                     └─────────┬─────────┘
                               ↓
                     Processed G-code File
@@ -211,20 +194,19 @@ File Upload → Moonraker → toolchanger_preprocessor.py
 ### Files Already Preprocessed
 Files are only preprocessed once. The first line will contain:
 ```gcode
-; processed by toolchanger_preprocessor
+; processed by klipper-gcode-preprocessor
 ```
 
 To reprocess, delete this line or re-upload the file.
 
-### Tool Not Cooling Down
-- Check `exclude_tools` setting (empty by default - all tools cooled)
+### Tool Not Shutting Down
+- Check `exclude_tools` setting (empty by default - all tools shut down)
 - Verify the tool is actually used multiple times (needs a "last usage")
-- Check logs for `tool_thermal_manager` messages
+- Check logs for `unused_tool_shutdown` messages
 
 ### Placeholders Not Replaced
-- Ensure `metadata_extractor` runs before `placeholder_replacer`
-- Check `processor_order` setting
-- Verify slicer is supported (Prusa/Orca/Bambu)
+- Ensure `token_replacer` is in the processors list
+- Verify slicer is supported (PrusaSlicer, OrcaSlicer, BambuStudio, SuperSlicer)
 
 ## Examples
 
@@ -243,7 +225,7 @@ G1 X100 Y100 E10
 
 **After Preprocessing:**
 ```gcode
-; processed by toolchanger_preprocessor
+; processed by klipper-gcode-preprocessor
 T0
 G1 X100 Y100 E10
 T1
