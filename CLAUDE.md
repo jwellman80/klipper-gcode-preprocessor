@@ -81,12 +81,16 @@ The preprocessor uses a three-phase pipeline where each processor gets three pas
    - Processes non-comment lines only for replacements (preserves slicer metadata)
    - See `klipper/extras/preprocessors/token_replacer.py`
 
-2. **unused_tool_shutdown**
-   - Automatically inserts `M104 T{n} S0` shutdown commands after last tool usage
-   - Scans entire file to build tool usage map, identifies last usage for each tool
+2. **idle_tool_shutdown** (formerly unused_tool_shutdown)
+   - Two modes: end-of-use shutdown (always on) + predictive idle shutdown (optional)
+   - **End-of-use**: Inserts `M104 T{n} S0` after last tool usage in file
+   - **Predictive idle**: Looks ahead to predict when tool will be idle > threshold, shuts down immediately
+   - Scans entire file to build tool usage timeline with estimated print times
+   - Estimates print time by analyzing G0/G1 movements and calculating distances/feedrates
    - By default, all tools are shut down (no exclusions)
    - Can exclude specific tools via `exclude_tools` config (e.g., `exclude_tools: 0` to skip T0)
-   - See `klipper/extras/preprocessors/unused_tool_shutdown.py`
+   - Set `idle_timeout_minutes: 5` to enable predictive mode (0 = disabled)
+   - See `klipper/extras/preprocessors/idle_tool_shutdown.py`
 
 ### Key Patterns
 
@@ -149,11 +153,16 @@ def create_processor(config, logger):
 Then configure in `printer.cfg` or config file:
 ```ini
 [gcode_preprocessor]
-processors: token_replacer, unused_tool_shutdown, my_processor
+processors: token_replacer, idle_tool_shutdown, my_processor
 
-[preprocessor my_processor]
+[gcode_preprocessor my_processor]
 my_option: value
 ```
+
+**Config Section Naming:**
+- Processor config sections use the format `[gcode_preprocessor {processor_name}]` with a space
+- Example: `[gcode_preprocessor idle_tool_shutdown]` not `[preprocessor_idle_tool_shutdown]`
+- This matches Klipper's `load_config_prefix` pattern where module name is the prefix
 
 ## Configuration System
 
@@ -161,13 +170,28 @@ my_option: value
 
 **Config Sections:**
 - `[gcode_preprocessor]` - Main settings (enabled, processors list)
-- `[preprocessor {name}]` - Per-processor settings (processor-specific options)
+- `[gcode_preprocessor {name}]` - Per-processor settings (processor-specific options with space)
 - Moonraker component settings (in moonraker.conf): `[gcode_preprocessor]`
+
+**Example Configuration:**
+```ini
+[gcode_preprocessor]
+enabled: True
+processors: token_replacer, idle_tool_shutdown
+
+[gcode_preprocessor token_replacer]
+extract_tools: True
+
+[gcode_preprocessor idle_tool_shutdown]
+idle_timeout_minutes: 5
+exclude_tools:
+initial_feedrate: 3000
+```
 
 **Execution Order:**
 Processors execute in the order they appear in the `processors` list. Typical order:
 1. token_replacer - gather data first and replace token placeholders
-2. unused_tool_shutdown - insert shutdown commands
+2. idle_tool_shutdown - insert shutdown commands
 
 ## File Locations
 

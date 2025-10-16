@@ -30,15 +30,35 @@ sudo service klipper restart
 
 ## Features
 
-### 🔥 **Unused Tool Shutdown**
-Automatically inserts `M104 T{n} S0` commands to shut down tools after their last usage in the print. This saves energy, reduces wear, and prevents oozing from unused tools.
+### ⏱️ **Idle Tool Shutdown** (Formerly "Unused Tool Shutdown")
+Intelligently shuts down tools with two complementary strategies:
 
-**Example:**
+1. **End-of-Use Shutdown** (Always enabled): Automatically inserts `M104 T{n} S0` after a tool's last usage
+2. **Predictive Idle Shutdown** (Optional): Predicts when a tool will be idle for longer than a threshold and shuts it down immediately after tool change
+
+**Benefits:**
+- Saves energy and reduces wear on hotends
+- Prevents oozing from idle tools during long prints
+- Predictive mode allows tools to cool while idle instead of staying hot unnecessarily
+
+**Example (End-of-Use):**
 ```gcode
 T0          ; Print with T0
 T1          ; Switch to T1
 T0          ; Switch back to T0
-M104 T1 S0  ; T1 no longer needed - cooling down (INSERTED AUTOMATICALLY)
+; T1 no longer needed - cooling down (INSERTED AUTOMATICALLY)
+M104 T1 S0
+```
+
+**Example (Predictive Idle with 5min threshold):**
+```gcode
+T0          ; Use T0 at time 0:00
+; ... print for 3 minutes ...
+T1          ; Switch to T1 at time 3:00
+; T0 will be idle for 6.2 minutes - cooling down (INSERTED IMMEDIATELY)
+M104 T0 S0  ; Shutdown happens NOW, not 5 minutes later
+; ... print with T1 for 6 minutes ...
+T0          ; Use T0 again at time 9:00 (was idle 6 min)
 ```
 
 ### 🔄 **Token Replacer**
@@ -89,17 +109,27 @@ LIST_GCODE_PROCESSORS
 ### Default Settings
 Located in `~/printer_data/config/gcode-preprocessor/preprocessor.cfg`
 
-### Unused Tool Shutdown Settings
+### Idle Tool Shutdown Settings
 ```ini
-[preprocessor unused_tool_shutdown]
-exclude_tools:                # Empty by default (all tools shut down)
-                             # Example: exclude_tools: 0  (don't shut down T0)
-                             # Example: exclude_tools: 0,1  (don't shut down T0 or T1)
+[gcode_preprocessor idle_tool_shutdown]
+# Predictive idle timeout (set to 0 to disable, only use end-of-use shutdown)
+idle_timeout_minutes: 5      # Shut down tools idle for > 5 minutes
+
+# End-of-use feature (always enabled)
+exclude_tools:               # Comma-separated list to exclude (e.g., "0,1")
+
+# Time estimation (only used if idle_timeout_minutes > 0)
+initial_feedrate: 3000       # Initial feedrate in mm/min for time calculations
 ```
+
+**How it works:**
+- **End-of-use** is always active - tools are shut down after their final usage
+- **Predictive idle** is optional - when enabled, tools are shut down immediately if they'll be idle > threshold
+- Set `idle_timeout_minutes: 0` to disable predictive mode and only use end-of-use shutdown
 
 ### Token Replacer Settings
 ```ini
-[preprocessor token_replacer]
+[gcode_preprocessor token_replacer]
 extract_tools: True
 extract_colors: True
 extract_materials: True
@@ -147,9 +177,9 @@ def create_processor(config, logger):
 Then add to your config:
 ```ini
 [gcode_preprocessor]
-processors: token_replacer, unused_tool_shutdown, my_processor
+processors: token_replacer, idle_tool_shutdown, my_processor
 
-[preprocessor my_processor]
+[gcode_preprocessor my_processor]
 # Custom settings
 ```
 
@@ -188,8 +218,8 @@ klipper-gcode-preprocessor/
 │   └── preprocessors/
 │       ├── __init__.py
 │       ├── token_replacer.py          # Extract metadata & replace tokens
-│       ├── unused_tool_shutdown.py   # Auto shutdown unused tools
-│       └── example_template.py       # Example processor template
+│       ├── idle_tool_shutdown.py      # Intelligent tool shutdown (predictive + end-of-use)
+│       └── example_template.py        # Example processor template
 ├── moonraker/
 │   └── gcode_preprocessor.py          # Moonraker component
 ├── config/
@@ -217,8 +247,9 @@ To reprocess, delete this line or re-upload the file.
 
 ### Tool Not Shutting Down
 - Check `exclude_tools` setting (empty by default - all tools shut down)
-- Verify tool is used multiple times (needs "last usage")
-- Check logs for `unused_tool_shutdown` messages
+- For end-of-use: Verify tool is used multiple times (needs "last usage")
+- For predictive idle: Ensure `idle_timeout_minutes` is set and tool is idle long enough
+- Check logs for `idle_tool_shutdown` messages
 
 ### Placeholders Not Replaced
 - Ensure `token_replacer` is in the processors list

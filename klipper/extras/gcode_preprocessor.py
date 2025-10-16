@@ -121,7 +121,7 @@ class GcodePreprocessor:
 
                 # Create a config helper for the processor
                 # This allows processors to read their config with .get() method
-                section_name = f"preprocessor {processor_name}"
+                section_name = f"gcode_preprocessor {processor_name}"
                 proc_config = ProcessorConfig(section_name, self.config)
 
                 # Instantiate the processor
@@ -305,8 +305,17 @@ def load_config(config):
     return GcodePreprocessor(config)
 
 def load_config_prefix(config):
-    """Allow [preprocessor ...] config sections to be defined"""
+    """Allow [gcode_preprocessor ...] config sections to be defined"""
     # This function registers the config sections so Klipper doesn't complain
+    # We need to declare all possible options so Klipper's validator accepts them
+
+    # Get the section name to determine which processor this is for
+    section_name = config.get_name()
+
+    # Read all options as strings to prevent validation errors
+    # Klipper will complain if options aren't explicitly read
+    for option in config.get_prefix_options(''):
+        config.get(option, '')
+
     # Return a dummy object that Klipper can register
-    # The actual config values are read by GcodePreprocessor._load_processors()
     return PreprocessorConfigSection(config)
