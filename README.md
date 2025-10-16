@@ -30,35 +30,36 @@ sudo service klipper restart
 
 ## Features
 
-### 🔥 **Tool Thermal Manager** (Automatic Tool Cooldown)
-Automatically inserts `M104 T{n} S0` commands to cool down tools after their last usage in the print. This saves energy, reduces wear, and prevents oozing from unused tools.
+### 🔥 **Unused Tool Shutdown**
+Automatically inserts `M104 T{n} S0` commands to shut down tools after their last usage in the print. This saves energy, reduces wear, and prevents oozing from unused tools.
 
 **Example:**
 ```gcode
 T0          ; Print with T0
 T1          ; Switch to T1
 T0          ; Switch back to T0
-M104 T1 S0  ; T1 no longer needed - cool down (INSERTED AUTOMATICALLY)
+M104 T1 S0  ; T1 no longer needed - cooling down (INSERTED AUTOMATICALLY)
 ```
 
-### 📊 **Metadata Extractor**
-Extracts slicer metadata from G-code comments including:
+### 🔄 **Token Replacer**
+Extracts slicer metadata from G-code comments and replaces token placeholders with actual values.
+
+**Metadata extracted:**
 - Tools used
 - Filament colors
 - Filament materials
 - Print temperatures
-- Purge volumes
-- Filament names
+- Purge volumes (optional)
+- Filament names (optional)
 
-Supports: PrusaSlicer, SuperSlicer, OrcaSlicer, BambuStudio
-
-### 🔄 **Placeholder Replacer**
-Replace placeholders in your G-code or macros with actual values:
+**Placeholders replaced:**
 - `!tool_count!` → Number of tools
 - `!tools!` → Comma-separated tool list
 - `!colors!` → Hex color codes
 - `!materials!` → Material types
 - `!temperatures!` → Temperature values
+
+Supports: PrusaSlicer, SuperSlicer, OrcaSlicer, BambuStudio
 
 **Example Usage:**
 ```gcode
